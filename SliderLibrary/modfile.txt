@@ -1,2 +1,0 @@
-Load Priority 2
-Import "SliderLibrary.lua"
