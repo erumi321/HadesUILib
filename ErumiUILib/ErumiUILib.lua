@@ -1,5 +1,6 @@
 ModUtil.RegisterMod("ErumiUILib")
 ErumiUILib = {
+    Slider = {},
     Dropdown = {}
 }
 --[[TODO:
@@ -66,7 +67,7 @@ SliderFunctionValues = {
 }
 
 SaveIgnores["SliderFunctionValues"] = true
-function ErumiUILib.CreateSlider(screen, args)
+function ErumiUILib.Slider.CreateNew(screen, args)
 	local xPos = (args.X or 0)
     local yPos = (args.Y or 0)
     local components = screen.Components
@@ -91,7 +92,7 @@ function ErumiUILib.CreateSlider(screen, args)
         SetScaleX({ Id = components[Name .. "SliderImage"].Id , Fraction = (args.Scale.ImageX or 1)  })
         SetScaleY({ Id = components[Name .. "SliderImage"].Id , Fraction = (args.Scale.ImageY or 1) })
         SliderFunctionValues[components[Name .. "SliderImage"].Id] = {lastIndex = args.StartingFraction * args.ItemAmount}
-        return components[Name .. "SliderImage"].Id
+        return components[Name .. "SliderImage"]
     end
     return -1
 end
@@ -102,7 +103,7 @@ function ErumiUILibUpdateSliderPercentage(screen, button)
     local sliderId = components[button.pressedArgs.name .. "SliderImage"].Id
     if SliderFunctionValues[sliderId]["AlwaysUpdate"] ~= nil then
         for k,v in ipairs(SliderFunctionValues[sliderId]["AlwaysUpdate"]) do
-            thread(_G[v.FunctionName],{index = button.pressedArgs.buttonIndex, percentage =  button.pressedArgs.sliderPercent}, v.args)
+            thread(v.Function,{index = button.pressedArgs.buttonIndex, percentage =  button.pressedArgs.sliderPercent}, v.args, v.Slider)
         end
     end
     if SliderFunctionValues[sliderId]["onPass"] ~= nil then
@@ -110,11 +111,11 @@ function ErumiUILibUpdateSliderPercentage(screen, button)
         for k,v in ipairs(SliderFunctionValues[sliderId]["onPass"]) do
             if lastIndex > button.pressedArgs.buttonIndex then
                 if tonumber(v.eventIndex) >= button.pressedArgs.buttonIndex and tonumber(v.eventIndex) <= lastIndex then
-                    thread(_G[v.FunctionName],{index = button.pressedArgs.buttonIndex, percentage =  button.pressedArgs.sliderPercent}, v.args)
+                    thread(v.Function,{index = button.pressedArgs.buttonIndex, percentage =  button.pressedArgs.sliderPercent}, v.args, v.Slider)
                 end
             elseif lastIndex < button.pressedArgs.buttonIndex then
                 if tonumber(v.eventIndex) <= button.pressedArgs.buttonIndex and tonumber(v.eventIndex) >= lastIndex then
-                    thread(_G[v.FunctionName],{index = button.pressedArgs.buttonIndex, percentage =  button.pressedArgs.sliderPercent}, v.args)
+                    thread(v.Function,{index = button.pressedArgs.buttonIndex, percentage =  button.pressedArgs.sliderPercent}, v.args, v.Slider)
                 end
             end
         end
@@ -124,10 +125,10 @@ function ErumiUILibUpdateSliderPercentage(screen, button)
             if string.find(v.eventIndex, ":") then
                 local splitStr = ErumiUILib.mysplit(v.eventIndex, ":")
                 if button.pressedArgs.buttonIndex > tonumber(splitStr[1]) and button.pressedArgs.buttonIndex < tonumber(splitStr[2]) then
-                    thread(_G[v.FunctionName],{index = button.pressedArgs.buttonIndex, percentage =  button.pressedArgs.sliderPercent}, v.args)
+                    thread(v.Function,{index = button.pressedArgs.buttonIndex, percentage =  button.pressedArgs.sliderPercent}, v.args, v.Slider)
                 end
             elseif button.pressedArgs.buttonIndex == tonumber(v.eventIndex) then
-                thread(_G[v.FunctionName],{index = button.pressedArgs.buttonIndex, percentage =  button.pressedArgs.sliderPercent}, v.args)
+                thread(v.Function,{index = button.pressedArgs.buttonIndex, percentage =  button.pressedArgs.sliderPercent}, v.args, v.Slider)
             end
         end
     end
@@ -144,10 +145,11 @@ end
     sliderEventArgs = any table (default empty Table)
 }
 ]]
-function ErumiUILib.CreateSliderListener(sliderId, args)
+function ErumiUILib.Slider.CreateListener(slider, args)
     if args.sliderEvent == nil then
         return
     end
+    local sliderId = slider.Id
     local isAlways = args.AlwaysUpdate
     local isOnPass = args.onPass
     local eventIndex = args.eventIndex
@@ -155,9 +157,11 @@ function ErumiUILib.CreateSliderListener(sliderId, args)
     local sliderEventArgs = args.sliderEventArgs
     local eventTable = {
         eventIndex = eventIndex,
-        FunctionName = sliderEvent,
-        args = sliderEventArgs
+        Function = sliderEvent,
+        args = sliderEventArgs,
+        slider = slider
     }
+    
     if isAlways then
         if SliderFunctionValues[sliderId]["AlwaysUpdate"] == nil then
             SliderFunctionValues[sliderId]["AlwaysUpdate"] = {}
@@ -177,7 +181,7 @@ function ErumiUILib.CreateSliderListener(sliderId, args)
     end
 end
 
-function ErumiUILib.mysplit (inputstr, sep)
+function ErumiUILib.Slider.mysplit (inputstr, sep)
     if sep == nil then
             sep = "%s"
     end
@@ -190,44 +194,6 @@ end
 --#endregion
 
 --#region Dropdowns
-
---[[
-    Args{
-        ErumiUiLib.CreateDropdown{ function( dropdown ) print("The default value of " .. tostring(dropdown) .. " is VarEntry1!"); var1 = true; var2 = false; return "VarEntry1" end,
-  "VarEntry1" = function( dropdown ) print( "They selected VarEntry1 on " .. tostring(dropdown) ); var1 = true; var2 = false end,
-  "VarEntry2" = function( dropdown ) print( "They selected VarEntry2 on " .. tostring(dropdown) ); var2 = true; var1 = false end
-}
-        Name (As it says), 
-		Group (As it says), 
-		Scale = {X, Y}(As it says), 
-		X = itemLocationX, Y = itemLocationY, (starting positon of box),
-        GeneralOffset = {X = -375, Y = -25}, (Will be the values if the specialized Offset in each item is nil)
-		GeneralFontSize = 15, (Will be the value if the specialized FontSize in each item is nil)
-        Items = {
-            ["Default"] = function(dropdown)
-                --default function
-            end, --Must be named "Default"
-            ["Entry 1"] = {
-                event = function(dropdown)
-                            --The first option
-                        end,
-				FontSize = 15,
-				Offset = {X, Y},
-            },
-            ["Entry 2"] = {
-                event = function(dropdown)
-                    --The 2nd option
-                end,
-				FontSize = 15,
-				Offset = {X, Y},
-            },
-        },
-        Placeholder (string to show when nothign is selected)
-        variableToStoreTo (A string of the name of the variable that you want to store the current value to, not required,
-         if not nil then dropdown will auto show this value when created instead of placeholder),
-        onChangeFunction (A string of the name of a a function you want to run when the dropdown is changed, not required)
-    }
-]]
 function ErumiUILib.Dropdown.CreateDropdown(screen, args)
 	local xPos = (args.X or 0)
     local yPos = (args.Y or 0)
@@ -283,20 +249,24 @@ function ErumiUILib.Dropdown.Expand(screen, button)
             if v.Offset ~= nil then
                 offsetY = v.Offset.Y
             end
-            CreateTextBox({ Id = components[dropDownItemBackingKey].Id, Text = v.Text,
-                FontSize = v.FontSize or args.GeneralFontSize,
-                OffsetX = offsetX, OffsetY = offsetY,
-                Width = 665,
-                Justification = "Left",
-                VerticalJustification = "Top",
-                LineSpacingBottom = 8,
-                Font = "AlegreyaSansSCBold",
-                ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
-                TextSymbolScale = 0.8,
-            })
+            local textColor = Color.White
             if v.IsEnabled == false then
-                --components[dropDownItemBackingKey] = CreateScreenComponent({ Name = "MarketSlot", Group = args.Group, Scale = 1, X = (args.X or 0), Y = (args.Y or 0) + ySpaceAmount})
+                SetAlpha({ Id = components[dropDownItemBackingKey].Id, Fraction = 0.2, Duration = 0 })
+                components[dropDownItemBackingKey].OnPressedFunctionName = nil
+                textColor = {1, 1, 1, 0.2}
             end
+            CreateTextBox({ Id = components[dropDownItemBackingKey].Id, Text = v.Text,
+            FontSize = v.FontSize or args.GeneralFontSize,
+            OffsetX = offsetX, OffsetY = offsetY,
+            Width = 665,
+            Justification = "Left",
+            VerticalJustification = "Top",
+            LineSpacingBottom = 8,
+            Font = "AlegreyaSansSCBold",
+            Color = textColor,
+            ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
+            TextSymbolScale = 0.8,
+        })
         end
     end
 end
@@ -363,12 +333,8 @@ function ErumiUILib.Dropdown.UpdateBaseText(screen, dropdown)
     })
 end
 function ErumiUILib.Dropdown.GetValue(dropdown)
-    return dropdown.currentItem.Text
+    return dropdown.currentItem
 end
-testGlobal = nil
-SaveIgnores["testGlobal"] = true
-testGlobal1 = nil
-SaveIgnores["testGlobal1"] = true
 function ErumiUILib.Dropdown.SetValue(dropdown, value)
     local itemToSet = nil
     local items = dropdown.dropDownPressedArgs.Items
