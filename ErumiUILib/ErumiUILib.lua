@@ -1,10 +1,11 @@
 ModUtil.RegisterMod("ErumiUILib")
 ErumiUILib = {
     Slider = {},
-    Dropdown = {}
+    Dropdown = {},
+    RadialMenu = {},
+    Misc = {}
 }
 --[[TODO:
-Dropdown Menus
 On-screen Keyboard for text fields:
 Modifibale size
 Able to disable input when opened or not (and then reenable if it disabled it)
@@ -459,7 +460,351 @@ function ErumiUILib.Dropdown.EnableEntry(dropdown, value)
 end
 --#endregion
 
---[[TODO dropdowns:
-ErumiUILib.DisableDropdownEntry( dropdown, value ) -> "grey out" a value in the dropdown's options (can't be clicked but still shows up) unless it's the currently selected option
-ErumiUILib.EnableDropdownEntry( dropdown, value ) -> de-"grey out" a value in the dropdown's options (can be clicked)
-]]
+--#region Radial Menus
+
+function ErumiUILib.RadialMenu.CreateMenu(screen, args)
+	local xPos = (args.X or 0)
+    local yPos = (args.Y or 0)
+    local components = screen.Components
+    local Name = (args.Name or "UnnamedRadialMenu")
+    components[Name .. "RadialCenter"] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group, Scale = 1, X = xPos, Y = yPos })
+    components[Name .. "RadialCenter"].args = args
+    components[Name .. "RadialCenter"].screen = screen
+    components[Name .. "RadialCenter"].IsExpanded = false
+    return components[Name .. "RadialCenter"]
+end
+function ErumiUILibRadialMenuClickRadialButton(screen, button)
+    button.RadialMenuPressedArgs.buttonData.Event(button.RadialMenuPressedArgs.parent)
+end
+function ErumiUILib.RadialMenu.Expand(radialMenu, ignoreTime)
+    if radialMenu.IsExpanded == true then
+        return
+    end
+    radialMenu.IsExpanded = true
+    local args = radialMenu.args
+    local xPos = (args.X or 0)
+    local yPos = (args.Y or 0)
+    local Name = (args.Name or "UnnamedRadialMenu")
+    local currentAngle = args.StartingAngle
+    local angleIncrement = (args.MaxAngle - args.StartingAngle) / #args.Items
+    local args = radialMenu.args
+    local components = radialMenu.screen.Components
+    for k,v in ipairs(args.Items)do
+        local a = (currentAngle - 90) * (math.pi / 180)
+        local curXPos = xPos + args.Radius * math.cos(a)
+        local curYPos = yPos + args.Radius * math.sin(a)
+        if ignoreTime then
+            components[Name .. "Button" .. k] = CreateScreenComponent({ Name = "ButtonClose", Scale = 0.7, Group = args.Group,  X = curXPos, Y = curYPos})
+            components[Name .. "ButtonImageBack" .. k] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group, Scale = 1, X = curXPos, Y = curYPos })
+            components[Name .. "ButtonImage" .. k] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group, Scale = 1, X = curXPos, Y = curYPos })
+        else
+            components[Name .. "Button" .. k] = CreateScreenComponent({ Name = "ButtonClose", Scale = 0.7, Group = args.Group,  X = xPos, Y = yPos})
+            components[Name .. "ButtonImageBack" .. k] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group, Scale = 1, X = xPos, Y = yPos })
+            components[Name .. "ButtonImage" .. k] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group, Scale = 1, X = xPos, Y = yPos })
+        end
+       
+        components[Name .. "Button" .. k].OnPressedFunctionName = "ErumiUILibRadialMenuClickRadialButton"
+        components[Name .. "Button" .. k].RadialMenuPressedArgs = {parent = components[Name .. "RadialCenter"], buttonData = v, Button = components[Name .. "Button" .. k]}
+        AttachLua({ Id = components[Name .. "Button" .. k].Id, Table = components[Name .. "Button" .. k] })
+
+        SetAnimation({ Name = "GUI\\Grey_Node", DestinationId = components[Name .. "ButtonImageBack" .. k].Id, Scale = 1 })
+        if v.Color ~= nil and args.GeneralColor ~= nil then
+            SetColor({ Id = components[Name .. "ButtonImageBack" .. k].Id, Color = v.Color or args.GeneralColor })
+        end
+        
+        SetAnimation({ Name = v.Image, DestinationId = components[Name .. "ButtonImage" .. k].Id, Scale = 1 })
+
+        SetScaleY({ Id = components[Name .. "Button" .. k].Id , Fraction = args.Scale.Y or 1 })
+        SetScaleX({ Id = components[Name .. "Button" .. k].Id , Fraction = args.Scale.X or 1 })
+
+        SetScaleY({ Id = components[Name .. "ButtonImage" .. k].Id , Fraction = v.Scale.Y or 1 })
+        SetScaleX({ Id = components[Name .. "ButtonImage" .. k].Id , Fraction = v.Scale.X or 1 })
+        if v.IsEnabled == false then
+            SetAlpha({ Id = components[Name .. "Button" .. k].Id, Fraction = 0, Duration = 0 })
+            SetAlpha({ Id = components[Name .. "ButtonImageBack" .. k].Id, Fraction = 0.2, Duration = 0 })
+            SetAlpha({ Id = components[Name .. "ButtonImage" .. k].Id, Fraction = 0.2, Duration = 0 })
+            components[Name .. "Button" .. k].OnPressedFunctionName = nil
+        end
+        if ignoreTime ~= true then
+            thread(function ()
+                Move({ Ids = { components[Name .. "Button" .. k].Id, components[Name .. "ButtonImageBack" .. k].Id, components[Name .. "ButtonImage" .. k].Id}, OffsetX = curXPos, OffsetY = curYPos, Duration = args.CreationTime })
+            end)
+        end
+        currentAngle = k * angleIncrement
+    end
+end
+OnMouseOver{"ButtonClose", function (triggerArgs)
+    testGlobal = triggerArgs
+    if triggerArgs.TriggeredByTable ~= nil then
+        local pressedArgs = triggerArgs.TriggeredByTable.RadialMenuPressedArgs
+        if pressedArgs ~= nil then
+            local parentArgs = pressedArgs.parent.args
+            local hoveredItemData = pressedArgs.buttonData
+            local components = pressedArgs.parent.screen.Components
+            local button = pressedArgs.Button
+            for k,v in pairs(components) do
+                if string.find(k, "CenterDisplay") or string.find(k, "IndepDisplay")then
+                    Destroy({Id = v.Id})
+                end
+            end
+            if parentArgs.TooltipStyle ~= nil then
+                DebugPrint({Text ="Not nil" })
+            end
+            if parentArgs.TooltipStyle.Name == "Independent" then
+                DebugPrint({Text ="Is independent" })
+            end
+            if parentArgs.TooltipStyle ~= nil and parentArgs.TooltipStyle.Name == "Independent" and button.IsEnabled ~= true then
+                local independentDisplayName = (parentArgs.Name or "UnnamedRadialMenu") .. "IndepDisplay"
+                components[independentDisplayName] = CreateScreenComponent({ Name = "MarketSlot", Group = "Combat_Menu", Scale = 1, X = parentArgs.TooltipStyle.args.X or 0, Y = parentArgs.TooltipStyle.args.Y or 0 })
+                DebugPrint({Text = parentArgs.TooltipStyle.args.X })
+                SetScaleY({ Id = components[independentDisplayName].Id , Fraction = parentArgs.Scale.Y or 1 })
+                SetScaleX({ Id = components[independentDisplayName].Id , Fraction = parentArgs.Scale.X or 1  })
+
+                CreateTextBox({
+                    Id = components[independentDisplayName].Id,
+                    Text = hoveredItemData.Desc,
+                    FontSize =  (parentArgs.TextStyle.FontSize or 20),
+                    OffsetX =  (parentArgs.TextStyle.OffsetX or 0), OffsetY =  (parentArgs.TextStyle.DescOffsetY or 0),
+                    Width = parentArgs.TextStyle.TextWidth or 1,
+                    Color = Color.White,
+                    Font = "AlegreyaSansSCBold",
+                    ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
+                    Justification = "Left",
+                })
+                CreateTextBox({ Id = components[independentDisplayName].Id, Text = hoveredItemData.Title,
+                    FontSize = (parentArgs.TextStyle.FontSize or 20),
+                    OffsetX =  (parentArgs.TextStyle.OffsetX or 0), OffsetY =  (parentArgs.TextStyle.TitleOffsetY or 0),
+                    Width = parentArgs.TextStyle.TextWidth or 1,
+                    Color = {0.988, 0.792, 0.247, 1},
+                    Font = "AlegreyaSansSCBold",
+                    ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
+                    Justification = "Left",
+                })
+            elseif button.IsEnabled ~= true then --Center
+                local centerDisplayKey = (parentArgs.Name or "UnnamedRadialMenu") .. "CenterDisplay"
+                components[centerDisplayKey] = CreateScreenComponent({ Name = "MarketSlot", Group = "Combat_Menu", Scale = 1, X = parentArgs.X or 0, Y = parentArgs.Y or 0 })
+
+                SetScaleY({ Id = components[centerDisplayKey].Id , Fraction = parentArgs.Scale.Y or 1 })
+                SetScaleX({ Id = components[centerDisplayKey].Id , Fraction = parentArgs.Scale.X or 1  })
+
+                CreateTextBox({
+                    Id = components[centerDisplayKey].Id,
+                    Text = hoveredItemData.Desc,
+                    FontSize =  (parentArgs.TextStyle.FontSize or 20),
+                    OffsetX =  (parentArgs.TextStyle.OffsetX or 0), OffsetY =  (parentArgs.TextStyle.DescOffsetY or 0),
+                    Width = parentArgs.TextStyle.TextWidth or 1,
+                    Color = Color.White,
+                    Font = "AlegreyaSansSCBold",
+                    ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
+                    Justification = "Left",
+                })
+                CreateTextBox({ Id = components[centerDisplayKey].Id, Text = hoveredItemData.Title,
+                    FontSize = (parentArgs.TextStyle.FontSize or 20),
+                    OffsetX =  (parentArgs.TextStyle.OffsetX or 0), OffsetY =  (parentArgs.TextStyle.TitleOffsetY or 0),
+                    Width = parentArgs.TextStyle.TextWidth or 1,
+                    Color = {0.988, 0.792, 0.247, 1},
+                    Font = "AlegreyaSansSCBold",
+                    ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
+                    Justification = "Left",
+                })
+            end
+        end
+    end
+end}
+function ErumiUILib.RadialMenu.Collapse( radialMenu, ignoreTime)
+    radialMenu.IsExpanded = false
+    local args = radialMenu.args
+    local xPos = (args.X or 0)
+    local yPos = (args.Y or 0)
+    local Name = (args.Name or "UnnamedRadialMenu")
+    local components = radialMenu.screen.Components
+    local waitTime = args.CreationTime
+    if ignoreTime then
+        waitTime = 0
+    end
+    DebugPrint({Text = waitTime})
+    for k,v in ipairs(args.Items)do
+        if ignoreTime then
+            if components[Name .. "Button" .. k] ~= nil then
+                Destroy({Ids = { components[Name .. "Button" .. k].Id, components[Name .. "ButtonImageBack" .. k].Id, components[Name .. "ButtonImage" .. k].Id}})
+            end
+        else
+            thread(function ()
+                if components[Name .. "Button" .. k] ~= nil then
+                    Move({ Ids = { components[Name .. "Button" .. k].Id, components[Name .. "ButtonImageBack" .. k].Id, components[Name .. "ButtonImage" .. k].Id}, OffsetX = xPos, OffsetY = yPos, Duration = waitTime })
+                    wait(waitTime)
+                    Destroy({Ids = { components[Name .. "Button" .. k].Id, components[Name .. "ButtonImageBack" .. k].Id, components[Name .. "ButtonImage" .. k].Id}})
+                end
+            end)
+        end
+    end
+end
+--[[
+function ErumiUILib.RadialMenu.UpdateTooltipText(screen, RadialMenu)
+    local args = RadialMenu.RadialMenuPressedArgs
+    local components = screen.Components
+    local itemToSwapTo = RadialMenu.currentItem
+
+    local textboxContainerName = args.Name .. "BaseTextbox"
+    if components[textboxContainerName] ~= nil then
+        Destroy({Id = components[textboxContainerName].Id})
+    end
+    components[textboxContainerName] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group, Scale = 1, X = args.X or 0, Y = args.Y or 0})
+
+    SetScaleY({ Id = components[textboxContainerName].Id , Fraction = args.Scale.Y or 1 })
+    SetScaleX({ Id = components[textboxContainerName].Id , Fraction = args.Scale.X or 1 })
+
+    
+    local offsetX = args.GeneralOffset.X
+    if itemToSwapTo.Offset ~= nil then
+        offsetX = itemToSwapTo.Offset.X
+    end
+    local offsetY = args.GeneralOffset.Y
+    if itemToSwapTo.Offset ~= nil then
+        offsetY = itemToSwapTo.Offset.Y
+    end
+
+    
+    CreateTextBox({ Id = components[textboxContainerName].Id, Text = itemToSwapTo.Text,
+        FontSize = itemToSwapTo.FontSize or args.GeneralFontSize,
+        OffsetX = offsetX, OffsetY = offsetY,
+        Width = 665,
+        Justification = "Left",
+        VerticalJustification = "Top",
+        LineSpacingBottom = 8,
+        Font = "AlegreyaSansSCBold",
+        ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
+        TextSymbolScale = 0.8,
+    })
+end
+]]--
+function ErumiUILib.RadialMenu.GetEntries(radialMenu)
+    local returnItems = {}
+    for k,v in pairs(radialMenu.args.Items)do
+        if v.IsEnabled ~= false then
+            table.insert(returnItems, v)
+        end
+    end
+    return returnItems
+end
+function ErumiUILib.RadialMenu.NewEntry(radialMenu, value)
+    local screen = radialMenu.screen
+    table.insert(radialMenu.args.Items, value)
+    if radialMenu.IsExpanded then
+        ErumiUILib.RadialMenu.Collapse(radialMenu, true)
+        ErumiUILib.RadialMenu.Expand(radialMenu, true)
+    end
+end
+function ErumiUILib.RadialMenu.DelEntry(radialMenu, value)
+    local itemToRemove = nil
+    local itemToRemoveIndex = nil
+    local items = radialMenu.args.Items
+    if type(value) == "number" then
+        if value > 0 then
+            itemToRemove = items[value]
+            itemToRemoveIndex = value
+        end
+    elseif type(value) == "string" then
+        for k,v in pairs(items) do
+            if v.Title == value then
+                itemToRemove = v
+                itemToRemoveIndex = k
+                break
+            end
+        end
+    end
+    if itemToRemove ~= nil then
+        local shouldExpand = false
+        if radialMenu.IsExpanded then
+            ErumiUILib.RadialMenu.Collapse(radialMenu, true)
+            shouldExpand = true
+        end
+        table.remove(radialMenu.args.Items, itemToRemoveIndex)
+        if shouldExpand then
+            ErumiUILib.RadialMenu.Expand(radialMenu, true)
+        end
+    end
+end
+function ErumiUILib.RadialMenu.DisableEntry(radialMenu, value)
+    local itemToDisable = nil
+    local itemToDisableIndex = nil
+    local items = radialMenu.args.Items
+    if type(value) == "number" then
+        if value > 0 then
+            itemToDisable = items[value]
+            itemToDisableIndex = value
+        end
+    elseif type(value) == "string" then
+        for k,v in pairs(items) do
+            if v.Text == value then
+                itemToDisable = v
+                itemToDisableIndex = k
+                break
+            end
+        end
+    end
+    if itemToDisable ~= nil then
+        items[itemToDisableIndex].IsEnabled = false
+        local screen = radialMenu.screen
+        if radialMenu.IsExpanded then
+            ErumiUILib.RadialMenu.Collapse(radialMenu, true)
+            ErumiUILib.RadialMenu.Expand(radialMenu, true)
+        end
+    end
+end
+function ErumiUILib.RadialMenu.EnableEntry(radialMenu, value)
+    local itemToDisable = nil
+    local itemToDisableIndex = nil
+    local items = radialMenu.args.Items
+    if type(value) == "number" then
+        if value > 0 then
+            itemToDisable = items[value]
+            itemToDisableIndex = value
+        end
+    elseif type(value) == "string" then
+        for k,v in pairs(items) do
+            if v.Text == value then
+                itemToDisable = v
+                itemToDisableIndex = k
+                break
+            end
+        end
+    end
+    if itemToDisable ~= nil then
+        items[itemToDisableIndex].IsEnabled = true
+        local screen = radialMenu.screen
+        if radialMenu.IsExpanded then
+            ErumiUILib.RadialMenu.Collapse(radialMenu, true)
+            ErumiUILib.RadialMenu.Expand(radialMenu, true)
+        end
+    end
+end
+--#endregion
+
+--#region Misc
+
+function ErumiUILib.Misc.NewButtonDoublePressedHandler( onPressedFunction, onSinglePressedFunction, onDoublePressedFunction, timeInterval )
+    --[[
+    DoSomethingFunction = ErumiUILib.Misc.NewButtonDoublePressedHandler( onPressedFunction, onSinglePressedFunction, onDoublePressedFunction, timeInterval )
+...
+button.onPressedFunction = "DoSomethingFunction"
+]]--
+    
+    local pressedTime
+    local function handler()
+      if pressedTime and _screenTime - pressedTime < timeInterval then
+        killTaggedThreads( handler )
+        pressedTime = nil
+        return onDoublePressedFunction() -- button was double clicked
+      end
+      thread( function( )
+        waitScreenTime( timeInterval, handler )
+        onSinglePressedFunction() -- button was clicked ( and was never double clicked )
+      end, handler )
+      pressedTime = _screenTime
+      return onPressedFunction() -- button was clicked ( initial )
+    end
+    return handler
+  end
+--#endregion
+
