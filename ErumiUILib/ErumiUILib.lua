@@ -554,7 +554,7 @@ OnMouseOver{"ButtonClose", function (triggerArgs)
                 DebugPrint({Text ="Is independent" })
             end
             if parentArgs.TooltipStyle ~= nil and parentArgs.TooltipStyle.Name == "Independent" and button.IsEnabled ~= true then
-                local independentDisplayName = (parentArgs.Name or "UnnamedRadialMenu") .. "IndepDisplay"
+                local independentDisplayName = (parentArgs.Name or "UnnamedRadialMenu") .. "IndepTooltipDisplay"
                 components[independentDisplayName] = CreateScreenComponent({ Name = "MarketSlot", Group = "Combat_Menu", Scale = 1, X = parentArgs.TooltipStyle.args.X or 0, Y = parentArgs.TooltipStyle.args.Y or 0 })
                 DebugPrint({Text = parentArgs.TooltipStyle.args.X })
                 SetScaleY({ Id = components[independentDisplayName].Id , Fraction = parentArgs.Scale.Y or 1 })
@@ -581,7 +581,7 @@ OnMouseOver{"ButtonClose", function (triggerArgs)
                     Justification = "Left",
                 })
             elseif button.IsEnabled ~= true then --Center
-                local centerDisplayKey = (parentArgs.Name or "UnnamedRadialMenu") .. "CenterDisplay"
+                local centerDisplayKey = (parentArgs.Name or "UnnamedRadialMenu") .. "CenterTooltipDisplay"
                 components[centerDisplayKey] = CreateScreenComponent({ Name = "MarketSlot", Group = "Combat_Menu", Scale = 1, X = parentArgs.X or 0, Y = parentArgs.Y or 0 })
 
                 SetScaleY({ Id = components[centerDisplayKey].Id , Fraction = parentArgs.Scale.Y or 1 })
@@ -628,9 +628,21 @@ function ErumiUILib.RadialMenu.Collapse( radialMenu, ignoreTime)
             if components[Name .. "Button" .. k] ~= nil then
                 Destroy({Ids = { components[Name .. "Button" .. k].Id, components[Name .. "ButtonImageBack" .. k].Id, components[Name .. "ButtonImage" .. k].Id}})
             end
+            if components[Name  .. "IndepTooltipDisplay"] ~= nil then
+                Destroy({Ids = { components[Name  .. "IndepTooltipDisplay"].Id}})
+            end
+            if components[Name  .. "CenterTooltipDisplay"] ~= nil then
+                Destroy({Ids = { components[Name  .. "CenterTooltipDisplay"].Id}})
+            end
         else
             thread(function ()
                 if components[Name .. "Button" .. k] ~= nil then
+                    if components[Name  .. "IndepTooltipDisplay"] ~= nil then
+                        Destroy({Ids = { components[Name  .. "IndepTooltipDisplay"].Id}})
+                    end
+                    if components[Name  .. "CenterTooltipDisplay"] ~= nil then
+                        Destroy({Ids = { components[Name  .. "CenterTooltipDisplay"].Id}})
+                    end
                     Move({ Ids = { components[Name .. "Button" .. k].Id, components[Name .. "ButtonImageBack" .. k].Id, components[Name .. "ButtonImage" .. k].Id}, OffsetX = xPos, OffsetY = yPos, Duration = waitTime })
                     wait(waitTime)
                     Destroy({Ids = { components[Name .. "Button" .. k].Id, components[Name .. "ButtonImageBack" .. k].Id, components[Name .. "ButtonImage" .. k].Id}})
