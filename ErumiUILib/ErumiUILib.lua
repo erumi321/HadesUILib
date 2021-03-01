@@ -3,6 +3,8 @@ ErumiUILib = {
     Slider = {},
     Dropdown = {},
     RadialMenu = {},
+    Keyboard = {},
+    Textbox = {},
     Misc = {}
 }
 --[[TODO:
@@ -285,7 +287,9 @@ function ErumiUILibDropdownButtonPressed(screen, button)
     ErumiUILib.Dropdown.UpdateBaseText(screen, parentButton)
 
     if itemToSwapTo.event ~= nil then
-        itemToSwapTo.event(parentButton)
+        itemToSwapTo.event(parentButton, itemToSwapTo)
+    elseif args.GeneralEvent ~= nil then
+        args.GeneralEvent(parentButton, itemToSwapTo)
     end
 end
 function ErumiUILib.Dropdown.Collapse(screen, button)
@@ -354,9 +358,7 @@ function ErumiUILib.Dropdown.SetValue(dropdown, value)
         end
     end
     if itemToSet ~= nil then
-        DebugPrint({Text = dropdown.currentItem})
         dropdown.currentItem = itemToSet
-        DebugPrint({Text = dropdown.currentItem})
         ErumiUILib.Dropdown.UpdateBaseText(dropdown.screen, dropdown)
     end
 end
@@ -474,7 +476,11 @@ function ErumiUILib.RadialMenu.CreateMenu(screen, args)
     return components[Name .. "RadialCenter"]
 end
 function ErumiUILibRadialMenuClickRadialButton(screen, button)
-    button.RadialMenuPressedArgs.buttonData.Event(button.RadialMenuPressedArgs.parent)
+    if button.RadialMenuPressedArgs.buttonData.Event ~= nil then
+        button.RadialMenuPressedArgs.buttonData.Event(button.RadialMenuPressedArgs.parent, button.RadialMenuPressedArgs.buttonData)
+    elseif button.RadialMenuPressedArgs.parent.args.GeneralEvent ~= nil then
+        button.RadialMenuPressedArgs.parent.args.GeneralEvent(button.RadialMenuPressedArgs.parent, button.RadialMenuPressedArgs.buttonData)
+    end
 end
 function ErumiUILib.RadialMenu.Expand(radialMenu, ignoreTime)
     if radialMenu.IsExpanded == true then
@@ -543,20 +549,13 @@ OnMouseOver{"ButtonClose", function (triggerArgs)
             local components = pressedArgs.parent.screen.Components
             local button = pressedArgs.Button
             for k,v in pairs(components) do
-                if string.find(k, "CenterDisplay") or string.find(k, "IndepDisplay")then
+                if string.find(k, "CenterTooltipDisplay") or string.find(k, "IndepTooltipDisplay")then
                     Destroy({Id = v.Id})
                 end
-            end
-            if parentArgs.TooltipStyle ~= nil then
-                DebugPrint({Text ="Not nil" })
-            end
-            if parentArgs.TooltipStyle.Name == "Independent" then
-                DebugPrint({Text ="Is independent" })
             end
             if parentArgs.TooltipStyle ~= nil and parentArgs.TooltipStyle.Name == "Independent" and button.IsEnabled ~= true then
                 local independentDisplayName = (parentArgs.Name or "UnnamedRadialMenu") .. "IndepTooltipDisplay"
                 components[independentDisplayName] = CreateScreenComponent({ Name = "MarketSlot", Group = "Combat_Menu", Scale = 1, X = parentArgs.TooltipStyle.args.X or 0, Y = parentArgs.TooltipStyle.args.Y or 0 })
-                DebugPrint({Text = parentArgs.TooltipStyle.args.X })
                 SetScaleY({ Id = components[independentDisplayName].Id , Fraction = parentArgs.Scale.Y or 1 })
                 SetScaleX({ Id = components[independentDisplayName].Id , Fraction = parentArgs.Scale.X or 1  })
 
@@ -622,7 +621,6 @@ function ErumiUILib.RadialMenu.Collapse( radialMenu, ignoreTime)
     if ignoreTime then
         waitTime = 0
     end
-    DebugPrint({Text = waitTime})
     for k,v in ipairs(args.Items)do
         if ignoreTime then
             if components[Name .. "Button" .. k] ~= nil then
@@ -790,6 +788,363 @@ function ErumiUILib.RadialMenu.EnableEntry(radialMenu, value)
             ErumiUILib.RadialMenu.Expand(radialMenu, true)
         end
     end
+end
+--#endregion
+
+--#region OSK
+function ErumiUILib.Keyboard.CreateKeyboard(screen, args)
+	local xPos = (args.X.Start or 0)
+    local yPos = (args.Y.Start or 0)
+    local components = screen.Components
+    local Name = (args.Name or "UnnamedKeyboard")
+
+    components[Name .. "KeyboardBase"] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group, Scale = 1, X = xPos, Y = yPos})
+    components[Name .. "KeyboardBase"].args = args
+    components[Name .. "KeyboardBase"].screen = screen
+
+    --[[for buttonIndex = 1, (args.ItemAmount or 1) do
+		components[Name .. "Button" .. buttonIndex] = CreateScreenComponent({ Name = "LevelUpPlus", Group = args.Group, Scale = 6, X = xPos, Y = yPos })
+        components[Name .. "Button" .. buttonIndex].OnPressedFunctionName = "ErumiUILibUpdateSliderPercentage"
+        local a = ((buttonIndex - 0.5) / (args.ItemAmount or 1))
+        local c = ((args.ItemWidth or 1) / 2)
+        local d = ((args.ItemWidth or 1) * (args.ItemAmount or 1))
+        components[Name .. "Button" .. buttonIndex].pressedArgs = {sliderPercent = a + ( c / d), name = Name, buttonIndex = buttonIndex, Image = args.Image}
+               
+        SetScaleX({ Id = components[Name .. "Button" .. buttonIndex].Id , Fraction = (args.Scale.ButtonsX or 1) * 1.2 })
+		SetScaleY({ Id = components[Name .. "Button" .. buttonIndex].Id , Fraction = (args.Scale.ButtonsY or 1) * 0.8 })
+        xPos = xPos + args.ItemWidth
+    end
+    if args.ShowSlider then
+        components[Name .. "SliderImage"] = CreateScreenComponent({ Name = args.Image, Group = args.Group, Scale = 1, X = (args.X or 0) + 65 + (args.SliderOffsetX or 0), Y = (args.Y or 0) })
+        --SetAnimation({ Name = "KeepsakeBarFill", DestinationId = components[Name .. "SliderImage"].Id, Scale = 1 })
+        SetAnimationFrameTarget({ Name = args.Image, Fraction = args.StartingFraction or 1, DestinationId = components[Name .. "SliderImage"].Id, Instant = true})
+        SetScaleX({ Id = components[Name .. "SliderImage"].Id , Fraction = (args.Scale.ImageX or 1)  })
+        SetScaleY({ Id = components[Name .. "SliderImage"].Id , Fraction = (args.Scale.ImageY or 1) })
+        SliderFunctionValues[components[Name .. "SliderImage"].Id] = {lastIndex = args.StartingFraction * args.ItemAmount}
+        return components[Name .. "SliderImage"]
+    end]]--
+    return components[Name .. "KeyboardBase"]
+end
+function ErumiUILib.Keyboard.Expand(keyboard, instant)
+    if keyboard.IsExpanded then
+        return
+    end
+    keyboard.IsExpanded = true
+    local args = keyboard.args
+    local screen = keyboard.screen
+    local startXPos = (args.X.Start or 0)
+    local startYPos = (args.Y.Start or 0)
+    local endXPos = (args.X.End or 0)
+    local endYPos = (args.Y.End or 0)
+    local components = screen.Components
+    local Name = (args.Name or "UnnamedKeyboard")
+
+    --Create Background
+    components[Name .. "KeyboardBackground"] = CreateScreenComponent({ Name = "rectangle01", Group = args.Group, Scale = 4, X = startXPos, Y = startYPos })
+    Attach({ Id = components[Name .. "KeyboardBackground"].Id, DestinationId = keyboard.Id, OffsetX = 0, OffsetY = 0})
+
+    SetScaleX({ Id = components[Name .. "KeyboardBackground"].Id , Fraction = (args.BackgroundScale.X or 1)  })
+    SetScaleY({ Id = components[Name .. "KeyboardBackground"].Id , Fraction = (args.BackgroundScale.Y or 1)  })
+	SetColor({ Id = components[Name .. "KeyboardBackground"].Id, Color = args.Colors.Background or {0,0,0,1} })
+
+    local layoutStrings = {
+        ["Alphanumeric"] = {
+            {Text = [[`~1!2 3#4$5%6^7&8*9(0)-_=+<-]], Offset = -25},
+            {Text = [[qQwWeErRtTyYuUiIoOpP| ]], Offset = -17},
+            {Text = [[aAsSdDfFgGhHjJkKlL;:'"<|]], Offset = -20},
+            {Text = [[||zZxXcCvVbBnNmM,<.>/?]], Offset = -17},
+            {Text = [[  |/<<>>]], Offset = 100},
+        },
+        ["Calculator"] = {
+            {Text = [[7 8 9 / ]], Offset = 100},
+            {Text = [[4 5 6 X ]], Offset = 100},
+            {Text = [[1 2 3 - ]], Offset = 100},
+            {Text = [[0 + = <||/]], Offset = 70 },
+        },
+        ["Numeric"] = {
+            {Text = [[7 8 9 ]], Offset = 150},
+            {Text = [[4 5 6 ]], Offset = 150},
+            {Text = [[1 2 3 ]], Offset = 150},
+            {Text = [[0 . <||/]], Offset = 100 },
+        },
+        ["Alphabetic"] = {
+            {Text = [[qQwWeErRtTyYuUiIoOpP| <-]], Offset = -20},
+            {Text = [[aAsSdDfFgGhHjJkKlL;:'"<|]], Offset = -20},
+            {Text = [[||zZxXcCvVbBnNmM,<.>/?]], Offset = -17},
+            {Text = [[  |/<<>>]], Offset = 100},
+        },
+    }
+    local currentXPos = args.Width.Start
+    local currentYPos = args.Height.Start
+        if instant ~= true then
+            Move({ Ids = {  keyboard.Id}, OffsetX = endXPos, OffsetY = endYPos, Duration = args.CreationTime })
+            wait(args.CreationTime)
+        else
+            Move({ Ids = {  keyboard.Id}, OffsetX = endXPos, OffsetY = endYPos, Duration = 0 })
+        end
+        local lines
+        if args.Layout.Style ~= nil and args.Layout.Style ~= "Custom" then
+            lines = layoutStrings[args.Layout.Style]
+        elseif args.Layout.Style == "Custom" then
+            lines = args.Layout.Pattern
+        end
+        local xScalar = (args.Width.End - args.Width.Start) / 170
+        local yScalar = (args.Height.End - args.Height.Start) / 34
+        local buttonScaleY =  yScalar / #lines
+        for k,v in pairs(lines) do
+            local lineScaleX = xScalar / (#v.Text / 2)
+            currentXPos = currentXPos + v.Offset
+            for i = 1, #v.Text, 2 do
+                local lower = v.Text:sub(i,i)
+                local upper = v.Text:sub(i+1,i+1)
+                local buttonName = Name .. "KeyboardButton(" .. lower .."," .. upper .. ")"
+                components[buttonName] = CreateScreenComponent({ Name = "MarketSlot", Group = args.Group, Scale = 0.5, X = currentXPos, Y = currentYPos })
+                SetScaleX({ Id = components[buttonName].Id , Fraction = 0.4 * lineScaleX })
+                SetScaleY({ Id = components[buttonName].Id , Fraction = 2  * buttonScaleY  })
+
+                components[buttonName].OnPressedFunctionName = "ErumiUILibKeyboardClickKey"
+                components[buttonName].Args = {args = args, Keys = {Lower = lower, Upper = upper}, keyboard = keyboard}
+
+                local curText = lower
+                local curColor = args.Colors.Text
+                if (lower == "<" and upper == "<") or (lower == ">" and upper == ">") then
+                    local imageName = Name .. "KeyboardImage(" .. lower .."," .. upper .. ")"
+                    local imagePath = "GUI\\Arrow_Right"
+                    if (lower ~= ">" and upper ~= ">") then
+                        imagePath = "GUI\\Arrow_Left"
+                    end
+                    components[imageName] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group, Scale = 1, X = currentXPos, Y = currentYPos })
+                    SetScaleX({ Id = components[imageName].Id , Fraction = 0.4 * lineScaleX })
+                    SetScaleY({ Id = components[imageName].Id , Fraction = 2  * buttonScaleY  })
+                    SetAnimation({ Name =imagePath, DestinationId = components[imageName].Id, Scale = 1 })
+                else
+                    if keyboard.IsUpper and upper ~= " " then
+                        curText = upper
+                    end
+                    if lower == " " and upper == " " then
+                        curText = " Space "
+                    end
+                    if lower == "<" and upper == "-" then
+                        curText = "Back"
+                    end
+                    if lower == "<" and upper == "|" then
+                        curText = " Enter "
+                    end
+                    if lower == "|" and upper == "|" then
+                        curText = "Shift"
+                        if keyboard.IsUpper then
+                            curColor = args.Colors.ShiftPressed
+                        end
+                    end
+                    if lower == "|" and upper == "/" then
+                        curText = "Close"
+                    end
+                    CreateTextBox({ Id = components[buttonName].Id, Text = curText,
+                        FontSize = 30,
+                        OffsetX = 0, OffsetY = -20,
+                        Width = 1920,
+                        Justification = "Center",
+                        VerticalJustification = "Top",
+                        LineSpacingBottom = 8,
+                        Font = "AlegreyaSansSCBold",
+                        Color = curColor,
+                        ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
+                        TextSymbolScale = 0.8,
+                    })
+                end
+                currentXPos = currentXPos + (180 * lineScaleX)
+            end
+            currentYPos = currentYPos + 100 * buttonScaleY
+            currentXPos = args.Width.Start
+            if not instant then
+                wait(0.05)
+            end
+        end
+end
+function ErumiUILibKeyboardClickKey(screen, button)
+    local args = button.Args
+    local keyboardArgs = args.args
+    local lower = args.Keys.Lower
+    local upper = args.Keys.Upper
+    local keyboard = args.keyboard
+    local curText = lower
+    if keyboard.IsUpper and upper ~= " " then
+        curText = upper
+    end
+    if lower == "<" and upper == "-" then
+        keyboardArgs.SpecialKeys.Back(keyboard)
+        return
+    end
+    if lower == "<" and upper == "|" then
+        --Enter
+        keyboardArgs.SpecialKeys.Enter(keyboard)
+        return
+    end
+    if lower == "|" and upper == "|" then
+        --Shift
+        keyboardArgs.SpecialKeys.Shift(keyboard)
+        return
+    end
+    if lower == "|" and upper == "/" then
+        --Close
+        keyboardArgs.SpecialKeys.Close(keyboard)
+        return
+    end
+    if lower == "<" and upper == "<" then
+        --Left
+        keyboardArgs.SpecialKeys.Left(keyboard)
+        return
+    end
+    if lower == ">" and upper == ">" then
+        --Right
+        keyboardArgs.SpecialKeys.Right(keyboard)
+        return
+    end
+    keyboardArgs.KeyPressedFunction(keyboard, curText)
+end
+function ErumiUILib.Keyboard.Collapse(keyboard, instant)
+    if keyboard.IsExpanded == false then
+        return
+    end
+        keyboard.IsExpanded = false
+        local args = keyboard.args
+        local screen = keyboard.screen
+        local startXPos = (args.X.Start or 0)
+        local startYPos = (args.Y.Start or 0)
+        local endXPos = (args.X.End or 0)
+        local endYPos = (args.Y.End or 0)
+        local components = screen.Components
+        local Name = (args.Name or "UnnamedKeyboard")
+        for k,v in pairs(components) do
+            if string.find(k, args.Name .. "KeyboardButton") or string.find(k, args.Name .. "KeyboardImage") then
+                Destroy({Id = v.Id})    
+            end
+        end
+        if not instant then
+            Move({ Ids = {  keyboard.Id}, OffsetX = startXPos, OffsetY = startYPos, Duration = args.CreationTime })
+            wait(args.CreationTime)
+            Destroy({Id = components[Name .. "KeyboardBackground"].Id})
+        else
+            Move({ Ids = {  keyboard.Id}, OffsetX = startXPos, OffsetY = startYPos, Duration = 0 })
+            Destroy({Id = components[Name .. "KeyboardBackground"].Id})
+        end
+end
+function ErumiUILib.Keyboard.Refresh(keyboard)
+ErumiUILib.Keyboard.Collapse(keyboard, true)
+ErumiUILib.Keyboard.Expand(keyboard, true)
+end
+--#endregion
+
+--#region TextBoxes
+function ErumiUILib.Textbox.CreateTextbox(screen, args)
+	local xPos = (args.X or 0)
+    local yPos = (args.Y or 0)
+    local components = screen.Components
+    local Name = (args.Name or "UnnamedTextBox")
+    --Create base default text and backingKey
+    local textBoxButtonKey = Name .. "Button"
+    components[textBoxButtonKey] = CreateScreenComponent({ Name = "MarketSlot", Group = args.Group, Scale = 1, X = xPos, Y = yPos })
+    SetScaleY({ Id = components[textBoxButtonKey].Id , Fraction = 2.75 * (args.Scale.Y or 1)})
+    SetScaleX({ Id = components[textBoxButtonKey].Id , Fraction = 0.55 * (args.Scale.X or 1)})
+    components[textBoxButtonKey].OnPressedFunctionName = "ErumiUILibTextFieldButtonPressed"
+    components[textBoxButtonKey].args =args
+    components[textBoxButtonKey].screen = screen
+    components[textBoxButtonKey].textboxName = Name .. "Backing"
+
+    local textBoxBackingKey = Name .. "Backing"
+    components[textBoxBackingKey] = CreateScreenComponent({ Name = "rectangle01", Group = args.Group, Scale = 1, X = xPos, Y = yPos })
+    components[textBoxBackingKey].args = args
+    components[textBoxBackingKey].screen = screen
+    components[textBoxBackingKey].currentText = args.StartingText or ""
+    components[textBoxBackingKey].cursorPosition = #args.StartingText or 1
+    
+
+    SetScaleY({ Id = components[textBoxBackingKey].Id , Fraction = args.Scale.Y or 1 })
+    SetScaleX({ Id = components[textBoxBackingKey].Id , Fraction = args.Scale.X or 1 })
+	SetColor({ Id = components[textBoxBackingKey].Id, Color = args.BackgroundColor or {0,0,0,1} })
+
+    local textBoxCursorHolder = Name .. "CursorHolder"
+    components[textBoxCursorHolder] = CreateScreenComponent({ Name = "BlankObstacle", X = xPos, Y = yPos, Group = args.Group })
+    CreateTextBox({ Id = components[textBoxCursorHolder].Id, Text = args.StartingText or "",
+    FontSize = args.TextStyle.FontSize or 20,
+    OffsetX = args.TextStyle.Offset.X or 0, OffsetY = args.TextStyle.Offset.Y or 0,
+    Width = args.TextStyle.Width or 780,
+    Justification = args.TextStyle.Justification,
+    VerticalJustification = "Top",
+    LineSpacingBottom = 8,
+    Font = "MonospaceTypewriterBold",
+    Color = args.CursorColor,
+    ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
+    TextSymbolScale = 0.8,
+})
+
+    local textBoxTextBackingKey = Name .. "TextHolder"
+    components[textBoxTextBackingKey] = CreateScreenComponent({ Name = "BlankObstacle", X = xPos, Y = yPos, Group = args.Group })
+    CreateTextBox({ Id = components[textBoxTextBackingKey].Id, Text = args.StartingText or "",
+        FontSize = args.TextStyle.FontSize or 20,
+        OffsetX = args.TextStyle.Offset.X or 0, OffsetY = args.TextStyle.Offset.Y or 0,
+        Width = args.TextStyle.Width or 780,
+        Justification = args.TextStyle.Justification,
+        VerticalJustification = "Top",
+        LineSpacingBottom = 8,
+        Font = "MonospaceTypewriterBold",
+        Color = args.TextStyle.Color,
+        ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
+        TextSymbolScale = 0.8,
+    })
+
+    return components[textBoxBackingKey]
+end
+function ErumiUILib.Textbox.Update(textbox, text)
+    local lines = {}
+    local args = textbox.args
+    local screen = textbox.screen
+    local components = screen.Components
+    local xPos = (args.X or 0)
+    local yPos = (args.Y or 0)
+    local Name = (args.Name or "UnnamedTextBox")
+    local textBoxTextBackingKey = Name .. "TextHolder"
+    local textBoxCursorHolder = Name .. "CursorHolder"
+    textbox.currentText = text
+    ModifyTextBox({ Id = components[textBoxTextBackingKey].Id, Text = text})
+    ModifyTextBox({ Id = components[textBoxCursorHolder].Id, Text = text:sub(1, textbox.cursorPosition+1).."|" .. text:sub(textbox.cursorPosition + 3)})
+end
+function ErumiUILib.Textbox.Write(textbox, text)
+    local newText = textbox.currentText
+    local cursorPos = textbox.cursorPosition
+    newText = newText:sub(1,cursorPos + 1)..text..newText:sub(cursorPos+#text + 1)
+    ErumiUILib.Textbox.SetCursorPosition(textbox, cursorPos + #text)
+    ErumiUILib.Textbox.Update(textbox, newText)
+end
+function ErumiUILib.Textbox.Delete(textbox, size)
+    local newText = textbox.currentText
+    if #newText + 2 > size and textbox.cursorPosition + 2> size and textbox.cursorPosition ~= 0 then
+        local cursorPos = textbox.cursorPosition
+        newText = newText:sub(1,cursorPos - size + 1).. newText:sub(cursorPos + 2)
+        ErumiUILib.Textbox.SetCursorPosition(textbox, cursorPos - size)
+        ErumiUILib.Textbox.Update(textbox, newText)
+    elseif textbox.cursorPosition == 0 then
+        newText = ""
+        ErumiUILib.Textbox.SetCursorPosition(textbox, 0)
+        ErumiUILib.Textbox.Update(textbox, newText)
+    end
+end
+function ErumiUILib.Textbox.SetCursorPosition(textbox, position)
+    if position >= 0 and position <= #textbox.currentText then
+        textbox.cursorPosition = position
+        ErumiUILib.Textbox.Update(textbox, textbox.currentText)
+    end
+end
+function ErumiUILib.Textbox.GetText(textbox)
+    return textbox.currentText
+end
+function ErumiUILib.Textbox.SetText(textbox, text)
+    local cursorPos = #text
+    ErumiUILib.Textbox.SetCursorPosition(textbox, cursorPos)
+    ErumiUILib.Textbox.Update(textbox, text)
+end
+function ErumiUILibTextFieldButtonPressed(screen, button)
+    button.args.OnFocus(button.screen.Components[button.textboxName])
 end
 --#endregion
 
