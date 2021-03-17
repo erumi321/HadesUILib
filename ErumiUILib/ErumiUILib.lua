@@ -20,6 +20,27 @@ Radial Menus (Menu only, overlays later as that could be confusing with input ha
 Slider dragging: Sliding turned on when clicked, follows mouse until mouse clicked again to turn mouse follow off
 Creating Sub-menus that dont re-enable input on close, effectively making in menu pop-up systems
 ]]--
+--#region Misc
+local buttonDoublePressedTime = setmetatable( { }, { __mode = "k" } )
+local buttonDoublePressedId = function( button ) return "ButtonDoublePressed" .. tostring( button ) end
+function ErumiUILib.Misc.NewButtonDoublePressedHandler( onPressedFunction, onSinglePressedFunction, onDoublePressedFunction, timeInterval )
+    return function ( screen, button, ... )
+      local pressedTime = buttonDoublePressedTime[ button ]
+      if pressedTime and _screenTime - pressedTime < timeInterval then
+        killTaggedThreads( buttonDoublePressedId( button ) )
+        buttonDoublePressedTime[ button ] = nil
+        return onDoublePressedFunction( screen, button, ... ) -- button was double clicked
+      end
+      thread( function( )
+        waitScreenTime( timeInterval, buttonDoublePressedId( button ) )
+        onSinglePressedFunction( screen, button ) -- button was clicked ( and was never double clicked )
+      end, buttonDoublePressedId( button ) )
+      buttonDoublePressedTime[ button ] = _screenTime
+      return onPressedFunction( screen, button, ... ) -- button was clicked ( initial )
+    end
+  end
+--#endregion
+
 --#region Sliders
 
 SliderFunctionValues = {
@@ -71,8 +92,19 @@ SliderFunctionValues = {
         The variables can be named differently, of course
     ]]--
 }
-
 SaveIgnores["SliderFunctionValues"] = true
+
+function ErumiUILib.Slider.BaseClickFunc(screen, button)
+end
+function ErumiUILib.Slider.SinglePressFunc(screen, button)
+     ErumiUILib.Slider.UpdatePercentage(screen, button) 
+end
+function ErumiUILib.Slider.DoublePressFunc(screen, button) 
+    button.ParentSlider.isDragging = not button.ParentSlider.isDragging
+    ErumiUILib.Slider.UpdatePercentage(screen, button) 
+end
+ErumiUILib.Slider.OnPressedFunction = ErumiUILib.Misc.NewButtonDoublePressedHandler(ErumiUILib.Slider.BaseClickFunc,ErumiUILib.Slider.SinglePressFunc,ErumiUILib.Slider.DoublePressFunc, 0.2)
+
 function ErumiUILib.Slider.CreateSlider(screen, args)
   	local xPos = (args.X or 0)
     local yPos = (args.Y or 0)
@@ -89,11 +121,14 @@ function ErumiUILib.Slider.CreateSlider(screen, args)
         end
         SliderFunctionValues[components[Name .. "SliderImage"].Id] = {lastIndex = args.StartingFraction * args.ItemAmount}
         components[Name .. "SliderImage"].Children = {}
-        
+        components[Name .. "SliderImage"].isDragging = false
+        components[Name .. "SliderImage"].screen = screen
+        components[Name .. "SliderImage"].isSliderImage = true
+        AttachLua({ Id = components[Name .. "SliderImage"].Id, Table = components[Name .. "SliderImage"] })
     end
     for buttonIndex = 1, (args.ItemAmount or 1) do
 		components[Name .. "Button" .. buttonIndex] = CreateScreenComponent({ Name = "BoonSlot1", Group = args.Group, Scale = 1, X = xPos, Y = yPos })
-        components[Name .. "Button" .. buttonIndex].OnPressedFunctionName = "ErumiUILibUpdateSliderPercentage"
+
         local a = ((buttonIndex - 0.5) / (args.ItemAmount or 1))
         local c = ((args.ItemWidth or 1) / 2)
         local d = ((args.ItemWidth or 1) * (args.ItemAmount or 1))
@@ -104,17 +139,21 @@ function ErumiUILib.Slider.CreateSlider(screen, args)
         xPos = xPos + args.ItemWidth
         if args.ShowSlider then
             components[Name .. "SliderImage"].Children[Name .. "Button" .. buttonIndex] = components[Name .. "Button" .. buttonIndex]
+            components[Name .. "Button" .. buttonIndex].ParentSlider = components[Name .. "SliderImage"]
+            components[Name .. "Button" .. buttonIndex].OnPressedFunctionName = "ErumiUILib.Slider.OnPressedFunction"
+            components[Name .. "Button" .. buttonIndex].OnMouseOverFunctionName = "ErumiUILibSliderButtonHoverOn"
+            components[Name .. "Button" .. buttonIndex].OnMouseOffFunctionName = "ErumiUILibSliderButtonHoverOff"
         end
+        AttachLua({ Id = components[Name .. "Button" .. buttonIndex].Id, Table = components[Name .. "Button" .. buttonIndex] })
     end
     if args.ShowSlider then
         return components[Name .. "SliderImage"]
     end
     return -1
 end
-
-function ErumiUILibUpdateSliderPercentage(screen, button)
+function ErumiUILib.Slider.UpdatePercentage(screen, button)
     local components = screen.Components
-    SetAnimationFrameTarget({ Name = button.pressedArgs.Image, Fraction = button.pressedArgs.sliderPercent, DestinationId = components[button.pressedArgs.name .. "SliderImage"].Id, Instant = true})
+    SetAnimationFrameTarget({ Name = button.pressedArgs.Image, Fraction = button.pressedArgs.sliderPercent, DestinationId = button.ParentSlider.Id, Instant = true})
     local sliderId = components[button.pressedArgs.name .. "SliderImage"].Id
     if SliderFunctionValues[sliderId]["AlwaysUpdate"] ~= nil then
         for k,v in ipairs(SliderFunctionValues[sliderId]["AlwaysUpdate"]) do
@@ -150,7 +189,22 @@ function ErumiUILibUpdateSliderPercentage(screen, button)
     SliderFunctionValues[sliderId].lastIndex = button.pressedArgs.buttonIndex
 
 end
-
+function ErumiUILibSliderButtonHoverOn(button)
+    if button.ParentSlider ~= nil then
+        if button.ParentSlider.isDragging then        
+            killTaggedThreads( "WaitForSliderSlideDisable" )
+            ErumiUILib.Slider.UpdatePercentage(button.ParentSlider.screen, button)
+        end
+    end
+end
+function ErumiUILibSliderButtonHoverOff(button)
+    if button.ParentSlider ~= nil then
+        if button.ParentSlider.isDragging then        
+            waitScreenTime( 0.05, "WaitForSliderSlideDisable" )
+            button.ParentSlider.isDragging = false
+        end
+    end
+end
 --[[Args should be
 {
     AlwaysUpdate = true/false (default f)
@@ -586,7 +640,6 @@ function ErumiUILib.RadialMenu.Expand(radialMenu, ignoreTime)
     end
 end
 OnMouseOver{"ButtonClose", function (triggerArgs)
-    testGlobal = triggerArgs
     if triggerArgs.TriggeredByTable ~= nil then
         local pressedArgs = triggerArgs.TriggeredByTable.RadialMenuPressedArgs
         if pressedArgs ~= nil then
@@ -854,25 +907,25 @@ ErumiUILib.Keyboard.Layouts = {
         {Text = [[qQwWeErRtTyYuUiIoOpP| ]], Offset = -17},
         {Text = [[aAsSdDfFgGhHjJkKlL;:'"<|]], Offset = -20},
         {Text = [[||zZxXcCvVbBnNmM,<.>/?]], Offset = -17},
-        {Text = [[  |\<<>>]], Offset = 100},
+        {Text = [[|\|/  <<>>]], Offset = 70},
     },
     ["Calculator"] = {
         {Text = [[7 8 9 / ]], Offset = 100},
         {Text = [[4 5 6 X ]], Offset = 100},
         {Text = [[1 2 3 - ]], Offset = 100},
-        {Text = [[0 + = <||/]], Offset = 70 },
+        {Text = [[0 + = <||\]], Offset = 70 },
     },
     ["Numeric"] = {
         {Text = [[7 8 9 ]], Offset = 150},
         {Text = [[4 5 6 ]], Offset = 150},
         {Text = [[1 2 3 ]], Offset = 150},
-        {Text = [[0 . <||/]], Offset = 100 },
+        {Text = [[0 . <||\]], Offset = 100 },
     },
     ["Alphabetic"] = {
         {Text = [[qQwWeErRtTyYuUiIoOpP| <-]], Offset = -20},
         {Text = [[aAsSdDfFgGhHjJkKlL;:'"<|]], Offset = -20},
         {Text = [[||zZxXcCvVbBnNmM,<.>/?]], Offset = -17},
-        {Text = [[  |/<<>>]], Offset = 100},
+        {Text = [[|\|/  <<>>]], Offset = 70},
     },
 }
 
@@ -890,27 +943,6 @@ function ErumiUILib.Keyboard.CreateKeyboard(screen, args)
     components[Name .. "KeyboardBase"].args = args
     components[Name .. "KeyboardBase"].screen = screen
     components[Name .. "KeyboardBase"].Children = {}
-    --[[for buttonIndex = 1, (args.ItemAmount or 1) do
-		components[Name .. "Button" .. buttonIndex] = CreateScreenComponent({ Name = "LevelUpPlus", Group = args.Group, Scale = 6, X = xPos, Y = yPos })
-        components[Name .. "Button" .. buttonIndex].OnPressedFunctionName = "ErumiUILibUpdateSliderPercentage"
-        local a = ((buttonIndex - 0.5) / (args.ItemAmount or 1))
-        local c = ((args.ItemWidth or 1) / 2)
-        local d = ((args.ItemWidth or 1) * (args.ItemAmount or 1))
-        components[Name .. "Button" .. buttonIndex].pressedArgs = {sliderPercent = a + ( c / d), name = Name, buttonIndex = buttonIndex, Image = args.Image}
-
-        SetScaleX({ Id = components[Name .. "Button" .. buttonIndex].Id , Fraction = (args.Scale.ButtonsX or 1) * 1.2 })
-		SetScaleY({ Id = components[Name .. "Button" .. buttonIndex].Id , Fraction = (args.Scale.ButtonsY or 1) * 0.8 })
-        xPos = xPos + args.ItemWidth
-    end
-    if args.ShowSlider then
-        components[Name .. "SliderImage"] = CreateScreenComponent({ Name = args.Image, Group = args.Group, Scale = 1, X = (args.X or 0) + 65 + (args.SliderOffsetX or 0), Y = (args.Y or 0) })
-        --SetAnimation({ Name = "KeepsakeBarFill", DestinationId = components[Name .. "SliderImage"].Id, Scale = 1 })
-        SetAnimationFrameTarget({ Name = args.Image, Fraction = args.StartingFraction or 1, DestinationId = components[Name .. "SliderImage"].Id, Instant = true})
-        SetScaleX({ Id = components[Name .. "SliderImage"].Id , Fraction = (args.Scale.ImageX or 1)  })
-        SetScaleY({ Id = components[Name .. "SliderImage"].Id , Fraction = (args.Scale.ImageY or 1) })
-        SliderFunctionValues[components[Name .. "SliderImage"].Id] = {lastIndex = args.StartingFraction * args.ItemAmount}
-        return components[Name .. "SliderImage"]
-    end]]--
     return components[Name .. "KeyboardBase"]
 end
 function ErumiUILib.Keyboard.Expand(keyboard, instant, skipCallback)
@@ -1003,7 +1035,7 @@ function ErumiUILib.Keyboard.Expand(keyboard, instant, skipCallback)
                     curText = "Close"
                 end
                 if lower == "|" and upper == "/" then
-                    curText = "Clear"
+                    curText = " Clear "
                 end
                 CreateTextBox({ Id = components[buttonName].Id, Text = curText,
                     FontSize = 30,
@@ -1168,7 +1200,7 @@ function ErumiUILib.Textbox.CreateTextbox(screen, args)
 
     -- Add a space at the start to allow us to clear the text with ModifyText (empty string will not upadte the textbox)
     components[textBoxBackingKey].currentText = " " .. components[textBoxBackingKey].currentText
-    components[textBoxBackingKey].cursorPosition = #args.StartingText + 1 or 0
+    components[textBoxBackingKey].cursorPosition = (#args.StartingText or 0) + 1
     components[textBoxBackingKey].maxLength = args.MaxLength or 999999 -- big number in place of infinity / disabling the limit :shrug:
     components[textBoxBackingKey].showCursor = args.ShowCursor or false
 
@@ -1178,7 +1210,7 @@ function ErumiUILib.Textbox.CreateTextbox(screen, args)
 
     local textBoxCursorHolder = Name .. "CursorHolder"
         components[textBoxCursorHolder] = CreateScreenComponent({ Name = "BlankObstacle", X = xPos, Y = yPos, Group = args.Group .. "Cursor" })
-        CreateTextBox({ Id = components[textBoxCursorHolder].Id, Text = "",
+        CreateTextBox({ Id = components[textBoxCursorHolder].Id, Text = " |",
         FontSize = args.TextStyle.FontSize or 20,
         OffsetX = args.TextStyle.Offset.X or 0, OffsetY = args.TextStyle.Offset.Y or 0,
         Width = args.TextStyle.Width or 780,
@@ -1189,10 +1221,22 @@ function ErumiUILib.Textbox.CreateTextbox(screen, args)
         Color = args.CursorColor,
         ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
         TextSymbolScale = 0.8,})
-
+        local textBoxValidTextBackingKey = Name .. "ValidTextHolder"
+        components[textBoxValidTextBackingKey] = CreateScreenComponent({ Name = "BlankObstacle", X = xPos, Y = yPos, Group = args.Group .. "Text" })
+        CreateTextBox({ Id = components[textBoxValidTextBackingKey].Id, Text = "",
+            FontSize = args.ValidityStyle.FontSize or 20,
+            OffsetX = args.ValidityStyle.Offset.X or 0, OffsetY = args.ValidityStyle.Offset.Y or 0,
+            Width = args.ValidityStyle.Width or 780,
+            Justification = args.ValidityStyle.Justification,
+            VerticalJustification = "Top",
+            LineSpacingBottom = 8,
+            Font = "MonospaceTypewriterBold",
+            Color = args.ValidityStyle.Valid,
+            ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
+            TextSymbolScale = 0.8})
     local textBoxTextBackingKey = Name .. "TextHolder"
     components[textBoxTextBackingKey] = CreateScreenComponent({ Name = "BlankObstacle", X = xPos, Y = yPos, Group = args.Group .. "Text" })
-    CreateTextBox({ Id = components[textBoxTextBackingKey].Id, Text = components[textBoxBackingKey].currentText,
+    CreateTextBox({ Id = components[textBoxTextBackingKey].Id, Text = "",
         FontSize = args.TextStyle.FontSize or 20,
         OffsetX = args.TextStyle.Offset.X or 0, OffsetY = args.TextStyle.Offset.Y or 0,
         Width = args.TextStyle.Width or 780,
@@ -1205,7 +1249,7 @@ function ErumiUILib.Textbox.CreateTextbox(screen, args)
         TextSymbolScale = 0.8})
 
     -- Note this also has the important job of calling update textbox
-    ErumiUILib.Textbox.ShowCursor(components[textBoxBackingKey], args.showCursor or false)
+    ErumiUILib.Textbox.ShowCursor(components[textBoxBackingKey], args.ShowCursor or false)
     components[textBoxBackingKey].Children[textBoxTextBackingKey] = components[textBoxTextBackingKey]
     components[textBoxBackingKey].Children[textBoxButtonKey] = components[textBoxButtonKey]
     components[textBoxBackingKey].Children[textBoxCursorHolder] = components[textBoxCursorHolder]
@@ -1230,6 +1274,36 @@ function ErumiUILib.Textbox.Update(textbox, text)
         ModifyTextBox({ Id = components[textBoxCursorHolder].Id, Text = " " .. text:sub(1, textbox.cursorPosition).."|"})
     else
       ModifyTextBox({ Id = components[textBoxCursorHolder].Id, Text = " "})
+    end
+    if args.CheckValidOnUpdate then
+        ErumiUILib.Textbox.CheckValidity(textbox)
+    end
+end
+function ErumiUILib.Textbox.CheckValidity(textbox)
+    local text = textbox.currentText
+    local args = textbox.args
+    local screen = textbox.screen
+    local components = screen.Components
+    local Name = (args.Name or "UnnamedTextBox")
+    local textBoxValidTextBackingKey = Name .. "ValidTextHolder"
+
+    if args.CheckFunc ~= nil then
+        local valid, msg = args.CheckFunc( text )
+        if valid == nil then
+            textbox.isValid = false
+            ModifyTextBox({ Id = components[textBoxValidTextBackingKey].Id, Color = args.ValidityStyle.Colors.Invalid})
+            if msg then
+                ModifyTextBox({ Id = components[textBoxValidTextBackingKey].Id, Text = msg}) 
+            end
+        else
+            textbox.isValid = true
+            ModifyTextBox({ Id = components[textBoxValidTextBackingKey].Id, Text = " "}) 
+            ModifyTextBox({ Id = components[textBoxValidTextBackingKey].Id, Color = args.ValidityStyle.Colors.Valid})
+        end
+    else
+        textbox.isValid = nil
+        ModifyTextBox({ Id = components[textBoxValidTextBackingKey].Id, Color = args.ValidityStyle.Colors.Unknown})
+        ModifyTextBox({ Id = components[textBoxValidTextBackingKey].Id, Text = " "}) 
     end
 end
 function ErumiUILib.Textbox.Write(textbox, text)
@@ -1302,14 +1376,20 @@ end
     end
     ModUtil.WrapBaseFunction("OnScreenClosed", function ( baseFunc, args )
         if ErumiUILib.SubScreen.OpenScreens[args.Flag]~= nil then
+            
             if ErumiUILib.SubScreen.OpenScreens[args.Flag].Children ~= nil then
                 for k,v in pairs(ErumiUILib.SubScreen.OpenScreens[args.Flag].Children) do
-                    DebugPrint({Text = k})
                     ErumiUILib.SubScreen.CloseChildren(v)
                 end
             end
             if ErumiUILib.SubScreen.OpenScreens[args.Flag].Parents ~= nil then
                 FreezePlayerUnit()
+            end
+            ErumiUILib.SubScreen.OpenScreens[args.Flag] = nil
+            for k,v in pairs(ErumiUILib.SubScreen.OpenScreens) do
+                if v.Children[args.Flag] ~= nil then
+                    v.Children[args.Flag] = nil
+                end
             end
         end
         return baseFunc(args)
@@ -1321,33 +1401,6 @@ end
         OnScreenClosed({ Flag = screen.Name })
     end
     --#endregion
-
---#region Misc
-
-function ErumiUILib.Misc.NewButtonDoublePressedHandler( onPressedFunction, onSinglePressedFunction, onDoublePressedFunction, timeInterval )
-    --[[
-    DoSomethingFunction = ErumiUILib.Misc.NewButtonDoublePressedHandler( onPressedFunction, onSinglePressedFunction, onDoublePressedFunction, timeInterval )
-...
-button.onPressedFunction = "DoSomethingFunction"
-]]--
-
-    local pressedTime
-    local function handler()
-      if pressedTime and _screenTime - pressedTime < timeInterval then
-        killTaggedThreads( handler )
-        pressedTime = nil
-        return onDoublePressedFunction() -- button was double clicked
-      end
-      thread( function( )
-        waitScreenTime( timeInterval, handler )
-        onSinglePressedFunction() -- button was clicked ( and was never double clicked )
-      end, handler )
-      pressedTime = _screenTime
-      return onPressedFunction() -- button was clicked ( initial )
-    end
-    return handler
-  end
---#endregion
 
 --[[
 
