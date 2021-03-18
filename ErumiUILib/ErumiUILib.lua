@@ -8,6 +8,7 @@ ErumiUILib = {
     SubScreen = {
         OpenScreens = {}
     },
+    ScrollingList = {},
     Misc = {}
 }
 --[[TODO:
@@ -1401,6 +1402,266 @@ end
         OnScreenClosed({ Flag = screen.Name })
     end
     --#endregion
+
+--#region Scrolling Lists
+function ErumiUILib.ScrollingList.CreateScrollingList(screen, args)
+    local xPos = (args.X or 0)
+    local yPos = (args.Y or 0)
+    local components = screen.Components
+    local Name = (args.Name or "UnnamedScrollingList")
+    --Create base default text and backingKey
+    local scrollingListTopBackingKey = Name .. "BaseBacking"
+    components[scrollingListTopBackingKey] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group, Scale = 1, X = xPos, Y = yPos })
+
+    components[scrollingListTopBackingKey].isEnabled = true
+    components[scrollingListTopBackingKey].Children = {}
+    components[scrollingListTopBackingKey].screen = screen
+    components[scrollingListTopBackingKey].CurrentPage = 0
+    components[scrollingListTopBackingKey].args = args
+
+    ErumiUILib.ScrollingList.Update(components[scrollingListTopBackingKey])
+    return components[scrollingListTopBackingKey]
+end
+function ErumiUILib.ScrollingList.Update(scrollingList)
+    local args = scrollingList.args
+    local screen = scrollingList.screen
+    local xPos = (args.X or 0)
+    local yPos = (args.Y or 0)
+    local components = screen.Components
+    local Name = (args.Name or "UnnamedScrollingList")
+    --Create base default text and backingKey
+    local scrollingListTopBackingKey = Name .. "BaseBacking"
+    local currentPageItems = {}
+
+    for _,v in pairs(scrollingList.Children) do
+        Destroy({Id = v.Id})
+    end
+
+    for i = 1, args.ItemsPerPage do
+        local curItem = args.Items[i + (scrollingList.CurrentPage * args.ItemsPerPage)]
+        if curItem == nil then
+            break
+        end
+            table.insert(currentPageItems, curItem)
+        
+    end
+    for k,v in pairs(currentPageItems) do
+        local scrollingListItemBackingKey = args.Name .. "ScrollingListBacking" .. k
+        local ySpaceAmount = 102* (k - 1) * args.Scale.Y + (args.Padding.Y * k)
+        components[scrollingListItemBackingKey] = CreateScreenComponent({ Name = "MarketSlot", Group = args.Group .. "ScrollingList", Scale = 1, X = (args.X or 0), Y = (args.Y or 0) + ySpaceAmount})
+        components[scrollingListItemBackingKey].scrollingListPressedArgs = {Args = args, parent = scrollingList, Index = k + (scrollingList.CurrentPage * args.ItemsPerPage)}
+
+        SetScaleY({ Id = components[scrollingListItemBackingKey].Id , Fraction = args.Scale.Y or 1 })
+        SetScaleX({ Id = components[scrollingListItemBackingKey].Id , Fraction = args.Scale.X or 1 })
+        local offsetX = (args.GeneralOffset or {X = 0}).X
+        if v.Offset ~= nil then
+            offsetX = v.Offset.X
+        end
+        local offsetY = (args.GeneralOffset or {Y = 0}).Y
+        if v.Offset ~= nil then
+            offsetY = v.Offset.Y
+        end
+        local textColor = Color.White
+        CreateTextBox({ Id = components[scrollingListItemBackingKey].Id, Text = v.Text,
+            FontSize = v.FontSize or args.GeneralFontSize,
+            OffsetX = offsetX, OffsetY = offsetY,
+            Width = 665,
+            Justification = (v.Justification or args.Justification) or "Center",
+            VerticalJustification = (v.VerticalJustification or args.VerticalJustification) or "Center",
+            LineSpacingBottom = 8,
+            Font = (v.Font or args.Font) or "AlegreyaSansSCBold",
+            Color = textColor,
+            ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
+            TextSymbolScale = 0.8,
+        })
+        if v.ImageStyle ~= nil and v.ImageStyle.Image ~= nil then
+            DebugPrint({Text = "v"})
+            local scrollingListItemImageBackingKey = args.Name .. "ScrollingListIcon" .. k
+            components[scrollingListItemImageBackingKey] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group .. "Image", Scale = v.ImageStyle.Scale or 1 })
+            SetAnimation({ Name = v.ImageStyle.Image  , DestinationId = components[scrollingListItemImageBackingKey].Id, Scale = 1 })
+            Attach({ Id = components[scrollingListItemImageBackingKey].Id, DestinationId = components[scrollingListItemBackingKey].Id, OffsetX = v.ImageStyle.Offset.X or 0, OffsetY = v.ImageStyle.Offset.Y or 0})
+            components[scrollingListTopBackingKey].Children[components[scrollingListItemImageBackingKey].Id] = components[scrollingListItemImageBackingKey]
+        elseif args.ImageStyle ~= nil and args.ImageStyle.Image ~= nil then
+            DebugPrint({Text = "args"})
+            local scrollingListItemImageBackingKey = args.Name .. "ScrollingListIcon" .. k
+            components[scrollingListItemImageBackingKey] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group .. "Image", Scale = args.ImageStyle.Scale or 1 })
+            SetAnimation({ Name = args.ImageStyle.Image, DestinationId = components[scrollingListItemImageBackingKey].Id, Scale = 1 })
+            Attach({ Id = components[scrollingListItemImageBackingKey].Id, DestinationId = components[scrollingListItemBackingKey].Id, OffsetX = args.ImageStyle.Offset.X or 0, OffsetY = args.ImageStyle.Offset.Y or 0})
+            scrollingList.Children[scrollingListItemImageBackingKey] = components[scrollingListItemImageBackingKey]
+        end
+        DebugPrint({Text = v.IsEnabled})
+        if v.IsEnabled ~= false then
+            components[scrollingListItemBackingKey].OnPressedFunctionName = "ErumiUILib.ScrollingList.ButtonPressed"
+        else
+            SetColor({ Id = components[scrollingListItemBackingKey].Id , Color = args.DeEnabledColor or {1,1,1,0.33} })
+        end
+        scrollingList.Children[scrollingListItemBackingKey] = components[scrollingListItemBackingKey]
+        local createUpArrow = function()
+            local scrollingListItemArrowKey = args.Name .. "ScrollingListArrowUp" .. k
+            components[scrollingListItemArrowKey] = CreateScreenComponent({ Name = "ButtonCodexUp", X = (args.X or 0) + (args.ArrowStyle.Offset.X or 0), Y = (args.Y or 0) + ySpaceAmount + (args.ArrowStyle.Offset.Y or 0), Scale = args.ArrowStyle.Scale, Sound = "/SFX/Menu Sounds/GeneralWhooshMENU", Group = "Combat_Menu_Overlay" })
+            components[scrollingListItemArrowKey].OnPressedFunctionName = "ErumiUILib.ScrollingList.PreviousPage"
+            components[scrollingListItemArrowKey].args = args
+            components[scrollingListItemArrowKey].Parent = scrollingList
+            
+            scrollingList.Children[components[scrollingListItemArrowKey].Id] = components[scrollingListItemArrowKey]
+            
+        end
+        local createDownArrow = function()
+            local scrollingListItemArrowKey = args.Name .. "ScrollingListArrowDown" .. k
+            components[scrollingListItemArrowKey] = CreateScreenComponent({ Name = "ButtonCodexDown", X = (args.X or 0) + (args.ArrowStyle.Offset.X or 0), Y = (args.Y or 0) + ySpaceAmount + (args.ArrowStyle.Offset.Y or 0), Scale = args.ArrowStyle.Scale, Sound = "/SFX/Menu Sounds/GeneralWhooshMENU", Group = "Combat_Menu_Overlay" })
+            scrollingList.Children[components[scrollingListItemArrowKey].Id] = components[scrollingListItemArrowKey]
+            components[scrollingListItemArrowKey].OnPressedFunctionName = "ErumiUILib.ScrollingList.NextPage"
+            components[scrollingListItemArrowKey].args = args
+            components[scrollingListItemArrowKey].Parent = scrollingList
+            
+            scrollingList.Children[components[scrollingListItemArrowKey].Id] = components[scrollingListItemArrowKey]
+        end
+        if args.ArrowStyle.CreationPositions.Style == "First" then
+            if k == 1 and args.ArrowStyle ~= nil then
+                createUpArrow()
+            elseif k == 2 and args.ArrowStyle ~= nil then
+                createDownArrow()    
+            end
+        elseif args.ArrowStyle.CreationPositions.Style == "TB" or args.ArrowStyle.CreationPositions.Style == "Top-Bottom" then
+            if k == 1 and args.ArrowStyle ~= nil then
+                createUpArrow()            
+            elseif k == #currentPageItems and args.ArrowStyle ~= nil then
+                createDownArrow()
+            end
+        elseif args.ArrowStyle.CreationPositions.Style == "Custom" then
+            if args.ArrowStyle ~= nil and k == args.ArrowStyle.CreationPositions.Positions[1] then
+                createUpArrow()
+            elseif args.ArrowStyle ~= nil and k == args.ArrowStyle.CreationPositions.Positions[2] then
+                createDownArrow()
+            end
+        end
+    end
+end
+function ErumiUILib.ScrollingList.PreviousPage(screen, button)
+    local parent = button.Parent
+    local args = button.args
+    if parent.CurrentPage - 1 >= 0 then
+        parent.CurrentPage = parent.CurrentPage - 1
+        ErumiUILib.ScrollingList.Update(parent)
+    end
+    
+end
+function ErumiUILib.ScrollingList.NextPage(screen, button)
+    local parent = button.Parent
+    local args = button.args
+    if #args.Items > (parent.CurrentPage + 1) * args.ItemsPerPage then
+        parent.CurrentPage = parent.CurrentPage + 1
+        ErumiUILib.ScrollingList.Update(parent)
+    end
+    
+end
+
+function ErumiUILib.ScrollingList.ButtonPressed(screen, button)
+  local args = button.scrollingListPressedArgs.Args
+  local components = screen.Components
+  local itemToSwapTo = args.Items[button.scrollingListPressedArgs.Index]
+  local parentButton = button.scrollingListPressedArgs.parent
+
+  if itemToSwapTo.event ~= nil then
+      itemToSwapTo.event(parentButton, itemToSwapTo)
+  elseif args.GeneralEvent ~= nil then
+      args.GeneralEvent(parentButton, itemToSwapTo)
+  end
+end
+function ErumiUILib.ScrollingList.GetEntries(scrollingList)
+  local returnItems = {}
+  for k,v in pairs(scrollingList.scrollingListPressedArgs.Items)do
+      if v.IsEnabled == true or v.IsEnabled == nil then
+          table.insert(returnItems, v)
+      end
+  end
+  return returnItems
+end
+function ErumiUILib.ScrollingList.NewEntry(scrollingList, value)
+  table.insert(scrollingList.scrollingListPressedArgs.Items, value)
+  local screen = scrollingList.screen
+  ErumiUILib.ScrollingList.Update(scrollingList)
+end
+function ErumiUILib.ScrollingList.DelEntry(scrollingList, value)
+  local itemToRemove = nil
+  local itemToRemoveIndex = nil
+  local items = scrollingList.scrollingListPressedArgs.Items
+  if type(value) == "number" then
+      if value > 0 then
+          itemToRemove = items[value]
+          itemToRemoveIndex = value
+      end
+  elseif type(value) == "string" then
+      for k,v in pairs(items) do
+          if v.Text == value then
+              itemToRemove = v
+              itemToRemoveIndex = k
+              break
+          end
+      end
+  end
+  if itemToRemove ~= nil and itemToRemove ~= scrollingList.currentItem then
+      table.remove(scrollingList.scrollingListPressedArgs.Items, itemToRemoveIndex)
+      local screen = scrollingList.screen
+      ErumiUILib.ScrollingList.Update(scrollingList)
+  end
+end
+function ErumiUILib.ScrollingList.DisableEntry(scrollingList, value)
+  local itemToDisable = nil
+  local itemToDisableIndex = nil
+  local items = scrollingList.scrollingListPressedArgs.Items
+  if type(value) == "number" then
+      if value > 0 then
+          itemToDisable = items[value]
+          itemToDisableIndex = value
+      end
+  elseif type(value) == "string" then
+      for k,v in pairs(items) do
+          if v.Text == value then
+              itemToDisable = v
+              itemToDisableIndex = k
+              break
+          end
+      end
+  end
+  if itemToDisable ~= nil and itemToDisable ~= scrollingList.currentItem then
+      items[itemToDisableIndex].IsEnabled = false
+      ErumiUILib.ScrollingList.Update(scrollingList)
+  end
+end
+function ErumiUILib.ScrollingList.EnableEntry(scrollingList, value)
+  local itemToDisable = nil
+  local itemToDisableIndex = nil
+  local items = scrollingList.scrollingListPressedArgs.Items
+  if type(value) == "number" then
+      if value > 0 then
+          itemToDisable = items[value]
+          itemToDisableIndex = value
+      end
+  elseif type(value) == "string" then
+      for k,v in pairs(items) do
+          if v.Text == value then
+              itemToDisable = v
+              itemToDisableIndex = k
+              break
+          end
+      end
+  end
+  if itemToDisable ~= nil and itemToDisable ~= scrollingList.currentItem then
+    items[itemToDisableIndex].IsEnabled = true
+    ErumiUILib.ScrollingList.Update(scrollingList)
+end
+end
+function ErumiUILib.ScrollingList.Destroy(scrollingList)
+  local components = scrollingList.screen.components
+  for _,v in pairs(scrollingList.Children) do
+      if components[v.Id] ~= nil then
+          Destroy({Id = v.Id})
+      end
+  end
+  Destroy({Id = scrollingList.Id})
+end
+--#endregion
 
 --[[
 
