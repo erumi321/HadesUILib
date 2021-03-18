@@ -18,4 +18,4 @@ Check the wiki tab for documentation on sliders and dropdowns
 * Slider dragging: Sliding turned on when double clicked, follows mouse until mouse double clicked again to turn mouse follow off, or mouse leaves the slider
 * Creating Sub-menus that dont re-enable input on close, effectively making in menu pop-up systems
 * Scrolling lists
-  * Scrolls at x items meanign entierly new items appear veery time you scroll
+  * Scrolls at x items meaning entierly new items appear veery time you scroll
