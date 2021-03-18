@@ -6,8 +6,7 @@ Check the wiki tab for documentation on sliders and dropdowns
 # TODO:
 * On-screen Keyboard (OSK)
   * Able to disable input when opened or not (and then reenable if it disabled it),(currently cant disable)
-* Scrolling lists
-  * Must be 1 item at a time as there are no masks (and i cant create one)
+
 
 # Finished
 * Dropdown Menus
@@ -18,3 +17,5 @@ Check the wiki tab for documentation on sliders and dropdowns
 * Text fields using the OSK
 * Slider dragging: Sliding turned on when double clicked, follows mouse until mouse double clicked again to turn mouse follow off, or mouse leaves the slider
 * Creating Sub-menus that dont re-enable input on close, effectively making in menu pop-up systems
+* Scrolling lists
+  * Scrolls at x items meanign entierly new items appear veery time you scroll
