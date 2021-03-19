@@ -1474,22 +1474,33 @@ function ErumiUILib.ScrollingList.Update(scrollingList)
             ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
             TextSymbolScale = 0.8,
         })
+        if v.Description then
+            CreateTextBox({ Id = components[scrollingListItemBackingKey].Id, Text = v.Description,
+                FontSize = v.DescriptionFontSize or args.DescriptionFontSize or 10,
+                OffsetX = (v.DescriptionOffset or args.DescriptionOffset).X or 0, OffsetY = (v.DescriptionOffset or args.DescriptionOffset).Y or 0,
+                Width = 665,
+                Justification = (v.Justification or args.Justification) or "Center",
+                VerticalJustification = (v.VerticalJustification or args.VerticalJustification) or "Center",
+                LineSpacingBottom = 8,
+                Font = (v.Font or args.Font) or "AlegreyaSansSCBold",
+                Color = args.DescriptionColor,
+                ShadowBlur = 0, ShadowColor = {0,0,0,1}, ShadowOffset={0, 2},
+                TextSymbolScale = 0.8,
+            })
+        end
         if v.ImageStyle ~= nil and v.ImageStyle.Image ~= nil then
-            DebugPrint({Text = "v"})
             local scrollingListItemImageBackingKey = args.Name .. "ScrollingListIcon" .. k
             components[scrollingListItemImageBackingKey] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group .. "Image", Scale = v.ImageStyle.Scale or 1 })
             SetAnimation({ Name = v.ImageStyle.Image  , DestinationId = components[scrollingListItemImageBackingKey].Id, Scale = 1 })
             Attach({ Id = components[scrollingListItemImageBackingKey].Id, DestinationId = components[scrollingListItemBackingKey].Id, OffsetX = v.ImageStyle.Offset.X or 0, OffsetY = v.ImageStyle.Offset.Y or 0})
             components[scrollingListTopBackingKey].Children[components[scrollingListItemImageBackingKey].Id] = components[scrollingListItemImageBackingKey]
         elseif args.ImageStyle ~= nil and args.ImageStyle.Image ~= nil then
-            DebugPrint({Text = "args"})
             local scrollingListItemImageBackingKey = args.Name .. "ScrollingListIcon" .. k
             components[scrollingListItemImageBackingKey] = CreateScreenComponent({ Name = "BlankObstacle", Group = args.Group .. "Image", Scale = args.ImageStyle.Scale or 1 })
             SetAnimation({ Name = args.ImageStyle.Image, DestinationId = components[scrollingListItemImageBackingKey].Id, Scale = 1 })
             Attach({ Id = components[scrollingListItemImageBackingKey].Id, DestinationId = components[scrollingListItemBackingKey].Id, OffsetX = args.ImageStyle.Offset.X or 0, OffsetY = args.ImageStyle.Offset.Y or 0})
             scrollingList.Children[scrollingListItemImageBackingKey] = components[scrollingListItemImageBackingKey]
         end
-        DebugPrint({Text = v.IsEnabled})
         if v.IsEnabled ~= false then
             components[scrollingListItemBackingKey].OnPressedFunctionName = "ErumiUILib.ScrollingList.ButtonPressed"
         else
@@ -1498,7 +1509,7 @@ function ErumiUILib.ScrollingList.Update(scrollingList)
         scrollingList.Children[scrollingListItemBackingKey] = components[scrollingListItemBackingKey]
         local createUpArrow = function()
             local scrollingListItemArrowKey = args.Name .. "ScrollingListArrowUp" .. k
-            components[scrollingListItemArrowKey] = CreateScreenComponent({ Name = "ButtonCodexUp", X = (args.X or 0) + (args.ArrowStyle.Offset.X or 0), Y = (args.Y or 0) + ySpaceAmount + (args.ArrowStyle.Offset.Y or 0), Scale = args.ArrowStyle.Scale, Sound = "/SFX/Menu Sounds/GeneralWhooshMENU", Group = "Combat_Menu_Overlay" })
+            components[scrollingListItemArrowKey] = CreateScreenComponent({ Name = "ButtonCodexUp", X = (args.X or 0) + (args.ArrowStyle.Offset.X or 0), Y = (args.Y or 0) + ySpaceAmount + (args.ArrowStyle.Offset.Y or 0), Scale = args.ArrowStyle.Scale, Sound = "/SFX/Menu Sounds/GeneralWhooshMENU", Group = args.Group .. "Arrows" })
             components[scrollingListItemArrowKey].OnPressedFunctionName = "ErumiUILib.ScrollingList.PreviousPage"
             components[scrollingListItemArrowKey].args = args
             components[scrollingListItemArrowKey].Parent = scrollingList
@@ -1508,7 +1519,7 @@ function ErumiUILib.ScrollingList.Update(scrollingList)
         end
         local createDownArrow = function()
             local scrollingListItemArrowKey = args.Name .. "ScrollingListArrowDown" .. k
-            components[scrollingListItemArrowKey] = CreateScreenComponent({ Name = "ButtonCodexDown", X = (args.X or 0) + (args.ArrowStyle.Offset.X or 0), Y = (args.Y or 0) + ySpaceAmount + (args.ArrowStyle.Offset.Y or 0), Scale = args.ArrowStyle.Scale, Sound = "/SFX/Menu Sounds/GeneralWhooshMENU", Group = "Combat_Menu_Overlay" })
+            components[scrollingListItemArrowKey] = CreateScreenComponent({ Name = "ButtonCodexDown", X = (args.X or 0) + (args.ArrowStyle.Offset.X or 0), Y = (args.Y or 0) + ySpaceAmount + (args.ArrowStyle.Offset.Y or 0), Scale = args.ArrowStyle.Scale, Sound = "/SFX/Menu Sounds/GeneralWhooshMENU", Group = args.Group .. "Arrows" })
             scrollingList.Children[components[scrollingListItemArrowKey].Id] = components[scrollingListItemArrowKey]
             components[scrollingListItemArrowKey].OnPressedFunctionName = "ErumiUILib.ScrollingList.NextPage"
             components[scrollingListItemArrowKey].args = args
